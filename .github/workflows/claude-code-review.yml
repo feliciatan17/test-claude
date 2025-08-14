@@ -6,7 +6,7 @@ on:
 
 jobs:
   claude-review:
-    runs-on: namespace-profile-dashpivot-dpw-8354
+    runs-on: ubuntu-latest
     permissions:
       contents: read
       pull-requests: write
