@@ -1,3 +1,3 @@
 export function greet(): void {
-    console.log("Greetings!");
+    console.log("Greetings!~");
 }
