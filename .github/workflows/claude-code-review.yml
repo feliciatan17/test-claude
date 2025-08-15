@@ -40,7 +40,7 @@ jobs:
             Use GitHub spoilers (collapsible sections) to organize your review and keep it concise:
             
             <details>
-            <summary>📋 Context</summary>
+            <summary>**📋 Context**</summary>
             
             - Overview of what the PR does
             - Context from Jira tickets/Confluence docs (if applicable)
@@ -49,7 +49,7 @@ jobs:
             </details>
             
             <details>
-            <summary>😊 Cassidy's Review (Optimistic & Constructive)</summary>
+            <summary>**😊 Cassidy's Review (Optimistic & Constructive)**</summary>
             
             - Positive aspects and good practices
             - Constructive suggestions for improvements
@@ -58,7 +58,7 @@ jobs:
             </details>
             
             <details>
-            <summary>😤 Linus' Review (Blunt & Technical)</summary>
+            <summary>**😤 Linus' Review (Blunt & Technical)**</summary>
             
             - Critical technical analysis
             - Potential issues and risks
