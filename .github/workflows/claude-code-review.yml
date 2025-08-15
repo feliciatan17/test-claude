@@ -40,7 +40,7 @@ jobs:
             Use GitHub spoilers (collapsible sections) to organize your review and keep it concise:
             
             <details>
-            <summary>📋 TODO & Context</summary>
+            <summary>📋 Context</summary>
             
             - Overview of what the PR does
             - Context from Jira tickets/Confluence docs (if applicable)
