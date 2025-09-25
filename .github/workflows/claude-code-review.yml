@@ -6,7 +6,7 @@ on:
 
 jobs:
   claude-review:
-    runs-on: namespace-profile-dashpivot-dpw-8354
+    runs-on: ubuntu-latest
     if: github.event.pull_request.draft == false || github.event.label.name == 'trigger-ci'
     continue-on-error: true
     permissions:
