@@ -96,3 +96,36 @@ jobs:
 
           # Optional: Use sticky comments to make Claude reuse the same comment on subsequent pushes to the same PR
           use_sticky_comment: true
+
+      - name: Analyze PR Changes and Update Description
+        id: update-pr-description
+        uses: anthropics/claude-code-action@beta
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          direct_prompt: |
+            Analyze the overall changes in this PR and generate a summary for the PR description.
+
+            Use Bash("gh pr diff") to get the full diff of changes.
+            Use Bash("gh pr view --json title,body") to get the current PR title and description.
+
+            Generate a concise summary of the changes that includes:
+            - High-level overview of what was changed
+            - Key files modified and their purpose
+            - Notable additions, modifications, or deletions
+            - Any breaking changes or important considerations
+
+            Format the summary as a markdown section that can be appended to the PR description.
+            Use this exact format:
+
+            ---
+            ## 🤖 Automated Change Summary
+            *This section is automatically updated by Claude*
+
+            [Your analysis here]
+
+            ---
+
+            After generating the summary, use Bash to update the PR description by appending this section.
+            First, get the current description, then append the new section, then update the PR.
+
+            Important: Only append to the description, don't overwrite existing content. If the automated section already exists, replace just that section.
