@@ -12,12 +12,12 @@ jobs:
     # 1. PR is marked ready for review, OR
     # 2. PR opened/reopened (non-draft), OR
     # 3. PR synchronized (new commits - will check commit message in steps), OR
-    # 4. Comment contains 'claude' + 'review' + trigger word on a non-draft PR, OR
+    # 4. Comment contains '@claude' OR 'claude' + 'review' + trigger word on a non-draft PR, OR
     # 5. Label 'trigger-ci' is added to a non-draft PR
     if: |
       github.event.action == 'ready_for_review' ||
       (github.event_name == 'pull_request' && github.event.pull_request.draft == false && contains(fromJSON('["opened", "reopened", "synchronize"]'), github.event.action)) ||
-      (github.event_name == 'issue_comment' && github.event.issue.pull_request && github.event.issue.draft == false && (contains(github.event.comment.body, 'claude') && contains(github.event.comment.body, 'review') && (contains(github.event.comment.body, 'run') || contains(github.event.comment.body, 'rerun')))) ||
+      (github.event_name == 'issue_comment' && github.event.issue.pull_request && github.event.issue.draft == false && (contains(github.event.comment.body, '@claude') || (contains(github.event.comment.body, 'claude') && contains(github.event.comment.body, 'review') && (contains(github.event.comment.body, 'run') || contains(github.event.comment.body, 'rerun'))))) ||
       (github.event_name == 'pull_request' && github.event.pull_request.draft == false && github.event.action == 'labeled' && github.event.label.name == 'trigger-ci')
     runs-on: ubuntu-latest
     continue-on-error: true
@@ -42,7 +42,7 @@ jobs:
           COMMIT_MSG=$(git log --format=%B -n 1 $COMMIT_SHA)
           echo "Checking commit: $COMMIT_SHA"
           echo "Commit message: $COMMIT_MSG"
-          if [[ "$COMMIT_MSG" == *"@claude"* ]] || [[ "$COMMIT_MSG" == *"run claude review"* ]]; then
+          if [[ "$COMMIT_MSG" == *"@claude"* ]] || [[ "$COMMIT_MSG" == *"claude"*"review"* && ("$COMMIT_MSG" == *"run"* || "$COMMIT_MSG" == *"rerun"*) ]]; then
             echo "should_run=true" >> $GITHUB_OUTPUT
           else
             echo "should_run=false" >> $GITHUB_OUTPUT
