@@ -10,15 +10,15 @@ jobs:
   claude-review:
     # Run if:
     # 1. PR is marked ready for review, OR
-    # 2. PR opened/reopened (non-draft), OR
-    # 3. PR synchronized (new commits - will check commit message in steps), OR
-    # 4. Comment contains '@claude' OR 'claude' + 'review' + trigger word on a non-draft PR, OR
-    # 5. Label 'trigger-ci' is added to a non-draft PR
+    # 2. PR opened/reopened/synchronized, OR
+    # 3. Comment contains trigger phrases, OR
+    # 4. Label 'trigger-ci' is added
+    # (Draft check happens in steps)
     if: |
       github.event.action == 'ready_for_review' ||
-      (github.event_name == 'pull_request' && github.event.pull_request.draft == false && contains(fromJSON('["opened", "reopened", "synchronize"]'), github.event.action)) ||
+      (github.event_name == 'pull_request' && contains(fromJSON('["opened", "reopened", "synchronize"]'), github.event.action)) ||
       (github.event_name == 'issue_comment' && github.event.issue.pull_request && (contains(github.event.comment.body, '@claude') || (contains(github.event.comment.body, 'claude') && contains(github.event.comment.body, 'review') && (contains(github.event.comment.body, 'run') || contains(github.event.comment.body, 'rerun'))))) ||
-      (github.event_name == 'pull_request' && github.event.pull_request.draft == false && github.event.action == 'labeled' && github.event.label.name == 'trigger-ci')
+      (github.event_name == 'pull_request' && github.event.action == 'labeled' && github.event.label.name == 'trigger-ci')
     runs-on: ubuntu-latest
     continue-on-error: true
     permissions:
@@ -28,6 +28,26 @@ jobs:
       id-token: write
 
     steps:
+      - name: Check if PR is draft
+        id: check-draft
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            IS_DRAFT="${{ github.event.pull_request.draft }}"
+          else
+            # For issue_comment events, fetch PR details
+            PR_NUMBER="${{ github.event.issue.number }}"
+            IS_DRAFT=$(gh pr view $PR_NUMBER --json isDraft --jq '.isDraft')
+          fi
+
+          echo "is_draft=$IS_DRAFT" >> $GITHUB_OUTPUT
+
+          if [ "$IS_DRAFT" = "true" ]; then
+            echo "PR is a draft, skipping review"
+            exit 1
+          fi
+        env:
+          GH_TOKEN: ${{ github.token }}
+
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
