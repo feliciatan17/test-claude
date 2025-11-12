@@ -3,7 +3,6 @@ name: Claude Code Review
 on:
   pull_request:
     types: [opened, synchronize, reopened, labeled, ready_for_review]
-  push:
   issue_comment:
     types: [created]
 
@@ -12,13 +11,12 @@ jobs:
     # Run if:
     # 1. PR is marked ready for review, OR
     # 2. PR opened/reopened (non-draft), OR
-    # 3. Comment contains '@claude' or 'rerun claude review' on a non-draft PR, OR
-    # 4. Push with '@claude' or 'run claude review' in commit message (not to main/master), OR
+    # 3. PR synchronized (new commits - will check commit message in steps), OR
+    # 4. Comment contains '@claude' or 'rerun claude review' on a non-draft PR, OR
     # 5. Label 'trigger-ci' is added to a non-draft PR
     if: |
       github.event.action == 'ready_for_review' ||
-      (github.event_name == 'pull_request' && github.event.pull_request.draft == false && contains(fromJSON('["opened", "reopened"]'), github.event.action)) ||
-      (github.event_name == 'push' && github.ref != 'refs/heads/main' && github.ref != 'refs/heads/master' && (contains(github.event.head_commit.message, '@claude') || contains(github.event.head_commit.message, 'run claude review'))) ||
+      (github.event_name == 'pull_request' && github.event.pull_request.draft == false && contains(fromJSON('["opened", "reopened", "synchronize"]'), github.event.action)) ||
       (github.event_name == 'issue_comment' && github.event.issue.pull_request && github.event.issue.draft == false && (contains(github.event.comment.body, '@claude') || contains(github.event.comment.body, 'rerun claude review'))) ||
       (github.event_name == 'pull_request' && github.event.pull_request.draft == false && github.event.action == 'labeled' && github.event.label.name == 'trigger-ci')
     runs-on: ubuntu-latest
@@ -35,8 +33,23 @@ jobs:
         with:
           fetch-depth: 1
 
+      - name: Check if commit message triggers review
+        id: check-commit
+        if: github.event_name == 'pull_request' && github.event.action == 'synchronize'
+        run: |
+          COMMIT_MSG=$(git log -1 --pretty=%B)
+          echo "Commit message: $COMMIT_MSG"
+          if [[ "$COMMIT_MSG" == *"@claude"* ]] || [[ "$COMMIT_MSG" == *"run claude review"* ]]; then
+            echo "should_run=true" >> $GITHUB_OUTPUT
+          else
+            echo "should_run=false" >> $GITHUB_OUTPUT
+          fi
+
       - name: Run Claude Code Review
         id: claude-review
+        if: |
+          github.event.action != 'synchronize' ||
+          steps.check-commit.outputs.should_run == 'true'
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
