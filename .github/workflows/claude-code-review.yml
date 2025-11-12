@@ -8,6 +8,7 @@ on:
 
 jobs:
   claude-review:
+    runs-on: ubuntu-latest
     # Run if:
     # 1. PR is marked ready for review, OR
     # 2. PR opened/reopened/synchronized, OR
@@ -19,7 +20,6 @@ jobs:
       (github.event_name == 'pull_request' && contains(fromJSON('["opened", "reopened", "synchronize"]'), github.event.action)) ||
       (github.event_name == 'issue_comment' && github.event.issue.pull_request && (contains(github.event.comment.body, '@claude') || (contains(github.event.comment.body, 'claude') && contains(github.event.comment.body, 'review') && (contains(github.event.comment.body, 'run') || contains(github.event.comment.body, 'rerun'))))) ||
       (github.event_name == 'pull_request' && github.event.action == 'labeled' && github.event.label.name == 'trigger-ci')
-    runs-on: ubuntu-latest
     continue-on-error: true
     permissions:
       contents: read
@@ -54,7 +54,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
 
-      - name: Check if commit message triggers review
+      - name: Check if commit message should trigger review
         id: check-commit
         if: github.event_name == 'pull_request' && github.event.action == 'synchronize' && steps.check-draft.outputs.is_draft != 'true'
         run: |
@@ -67,7 +67,6 @@ jobs:
             echo "should_run=true" >> $GITHUB_OUTPUT
           else
             echo "should_run=false" >> $GITHUB_OUTPUT
-          fi
 
       - name: Run Claude Code Review
         id: claude-review
@@ -79,7 +78,6 @@ jobs:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           track_progress: true # ✨ Enables tracking comments
 
-          # Direct prompt for automated review (no @claude mention needed)
           prompt: |
             REPO: ${{ github.repository }}
             PR NUMBER: ${{ github.event.pull_request.number }}
@@ -153,10 +151,10 @@ jobs:
             Format your review with clear sections and bullet points.
 
             Note: The PR branch is already checked out in the current working directory.
-            Post your review as a response - it will automatically be added as a PR comment.
+            Use `gh pr comment` for top-level feedback.
 
           # Optional: Use sticky comments to make Claude reuse the same comment on subsequent pushes to the same PR
           use_sticky_comment: true
           comment_tag: "claude-code-review"
           claude_args: |
-            --allowedTools "Bash(gh pr diff:*),Bash(gh pr view:*),Bash(gh pr list:*)"
+            --allowedTools "Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Bash(gh pr list:*)"
