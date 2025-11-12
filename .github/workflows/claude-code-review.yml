@@ -47,8 +47,9 @@ jobs:
           echo "is_draft=$IS_DRAFT" >> $GITHUB_OUTPUT
 
           if [ "$IS_DRAFT" = "true" ]; then
-            echo "PR is a draft, skipping review"
-            exit 1
+            echo "PR is a draft, will skip review"
+          else
+            echo "PR is not a draft, will run review"
           fi
         env:
           GH_TOKEN: ${{ github.token }}
@@ -71,8 +72,8 @@ jobs:
       - name: Run Claude Code Review
         id: claude-review
         if: |
-          github.event.action != 'synchronize' ||
-          steps.check-commit.outputs.should_run == 'true'
+          steps.check-draft.outputs.is_draft != 'true' &&
+          (github.event.action != 'synchronize' || steps.check-commit.outputs.should_run == 'true')
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
