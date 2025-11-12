@@ -10,9 +10,10 @@ jobs:
   claude-review:
     # Run if:
     # 1. PR is marked ready for review, OR
-    # 2. PR event (opened/reopened/synchronize) on a non-draft PR, OR
-    # 3. Comment contains '@claude' or 'rerun claude review' on a non-draft PR, OR
-    # 4. Label 'trigger-ci' is added to a non-draft PR
+    # 2. PR opened/reopened (non-draft), OR
+    # 3. PR synchronized (new commits - will check commit message in steps), OR
+    # 4. Comment contains '@claude' or 'rerun claude review' on a non-draft PR, OR
+    # 5. Label 'trigger-ci' is added to a non-draft PR
     if: |
       github.event.action == 'ready_for_review' ||
       (github.event_name == 'pull_request' && github.event.pull_request.draft == false && contains(fromJSON('["opened", "reopened", "synchronize"]'), github.event.action)) ||
@@ -32,8 +33,23 @@ jobs:
         with:
           fetch-depth: 1
 
+      - name: Check if commit message triggers review
+        id: check-commit
+        if: github.event_name == 'pull_request' && github.event.action == 'synchronize'
+        run: |
+          COMMIT_MSG=$(git log -1 --pretty=%B)
+          echo "Commit message: $COMMIT_MSG"
+          if [[ "$COMMIT_MSG" == *"@claude"* ]] || [[ "$COMMIT_MSG" == *"run claude review"* ]]; then
+            echo "should_run=true" >> $GITHUB_OUTPUT
+          else
+            echo "should_run=false" >> $GITHUB_OUTPUT
+          fi
+
       - name: Run Claude Code Review
         id: claude-review
+        if: |
+          github.event.action != 'synchronize' ||
+          steps.check-commit.outputs.should_run == 'true'
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
