@@ -47,16 +47,16 @@ jobs:
           echo "is_draft=$IS_DRAFT" >> $GITHUB_OUTPUT
 
           if [ "$IS_DRAFT" = "true" ]; then
-            echo "PR is a draft, will skip review"
+            echo "✓ PR is a draft - skipping review"
           else
-            echo "PR is not a draft, will run review"
+            echo "✓ PR is not a draft - will run review"
           fi
         env:
           GH_TOKEN: ${{ github.token }}
 
       - name: Check if commit message triggers review
         id: check-commit
-        if: github.event_name == 'pull_request' && github.event.action == 'synchronize'
+        if: github.event_name == 'pull_request' && github.event.action == 'synchronize' && steps.check-draft.outputs.is_draft != 'true'
         run: |
           # Get the commit that triggered this sync event
           COMMIT_SHA="${{ github.event.after }}"
