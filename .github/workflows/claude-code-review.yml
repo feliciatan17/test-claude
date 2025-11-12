@@ -31,13 +31,13 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 1
+          fetch-depth: 0
 
       - name: Check if commit message triggers review
         id: check-commit
         if: github.event_name == 'pull_request' && github.event.action == 'synchronize'
         run: |
-          # Get the commit that triggered this event (before any merge commits)
+          # Get the commit that triggered this sync event
           COMMIT_SHA="${{ github.event.after }}"
           COMMIT_MSG=$(git log --format=%B -n 1 $COMMIT_SHA)
           echo "Checking commit: $COMMIT_SHA"
