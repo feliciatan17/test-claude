@@ -3,11 +3,22 @@ name: Claude Code Review
 on:
   pull_request:
     types: [opened, synchronize, reopened, labeled, ready_for_review]
+  issue_comment:
+    types: [created]
 
 jobs:
   claude-review:
+    # Run if:
+    # 1. PR is marked ready for review, OR
+    # 2. PR event (opened/reopened/synchronize) on a non-draft PR, OR
+    # 3. Comment contains '@claude' or 'rerun claude review' on a non-draft PR, OR
+    # 4. Label 'trigger-ci' is added to a non-draft PR
+    if: |
+      github.event.action == 'ready_for_review' ||
+      (github.event_name == 'pull_request' && github.event.pull_request.draft == false && contains(fromJSON('["opened", "reopened", "synchronize"]'), github.event.action)) ||
+      (github.event_name == 'issue_comment' && github.event.issue.pull_request && github.event.issue.draft == false && (contains(github.event.comment.body, '@claude') || contains(github.event.comment.body, 'rerun claude review'))) ||
+      (github.event_name == 'pull_request' && github.event.pull_request.draft == false && github.event.action == 'labeled' && github.event.label.name == 'trigger-ci')
     runs-on: ubuntu-latest
-    if: github.event.pull_request.draft == false || github.event.label.name == 'trigger-ci'
     continue-on-error: true
     permissions:
       contents: read
@@ -23,17 +34,24 @@ jobs:
 
       - name: Run Claude Code Review
         id: claude-review
-        uses: anthropics/claude-code-action@beta
+        uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          track_progress: true # ✨ Enables tracking comments
 
           # Direct prompt for automated review (no @claude mention needed)
-          direct_prompt: |
+          prompt: |
+            REPO: ${{ github.repository }}
+            PR NUMBER: ${{ github.event.pull_request.number }}
+
             Review a PR
 
+            IMPORTANT: Post your review with this exact header at the top:
+            ## 🔍 General Code Review (Linus & Cassidy)
+
             You are an expert code reviewer. You have two personalities:
-            - A grumpy senior engineer, very technical and precise. His name is Linus. 
-            - An optimistic senior engineer, pragmatic, encouraging. Her name is Cassidy. 
+            - A grumpy senior engineer, very technical and precise. His name is Linus.
+            - An optimistic senior engineer, pragmatic, encouraging. Her name is Cassidy.
 
             You will review the pull request twice: once with each personality. Stay in-character for both personas. Balance friendliness (Cassidy) and bluntness (Linus), but ensure the final consensus is clear and useful. At the end you return a full report with the findings of each reviewer, and a consensus.
 
@@ -94,38 +112,11 @@ jobs:
             - Test coverage
             Format your review with clear sections and bullet points.
 
+            Note: The PR branch is already checked out in the current working directory.
+            Use `gh pr comment` for top-level feedback.
+
           # Optional: Use sticky comments to make Claude reuse the same comment on subsequent pushes to the same PR
           use_sticky_comment: true
-
-      - name: Analyze PR Changes and Update Description
-        id: update-pr-description
-        uses: anthropics/claude-code-action@beta
-        with:
-          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          direct_prompt: |
-            Analyze the overall changes in this PR and generate a summary for the PR description.
-
-            Use Bash("gh pr diff") to get the full diff of changes.
-            Use Bash("gh pr view --json title,body") to get the current PR title and description.
-
-            Generate a concise summary of the changes that includes:
-            - High-level overview of what was changed
-            - Key files modified and their purpose
-            - Notable additions, modifications, or deletions
-            - Any breaking changes or important considerations
-
-            Format the summary as a markdown section that can be appended to the PR description.
-            Use this exact format:
-
-            ---
-            ## 🤖 Automated Change Summary
-            *This section is automatically updated by Claude*
-
-            [Your analysis here]
-
-            ---
-
-            After generating the summary, use Bash to update the PR description by appending this section.
-            First, get the current description, then append the new section, then update the PR.
-
-            Important: Only append to the description, don't overwrite existing content. If the automated section already exists, replace just that section.
+          comment_tag: "claude-code-review"
+          claude_args: |
+            --allowedTools "Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Bash(gh pr list:*)"
