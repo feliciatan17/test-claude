@@ -3,10 +3,42 @@ name: Claude Code Review
 on:
   pull_request:
     types: [opened, synchronize, reopened, labeled, ready_for_review]
+  repository_dispatch:
+    types: [claude-review-requested]
   issue_comment:
     types: [created]
 
 jobs:
+  trigger-review:
+    if: github.event_name == 'issue_comment' && github.event.issue.pull_request && (contains(github.event.comment.body, '@claude') || contains(github.event.comment.body, '/review'))
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: write
+    steps:
+      - name: Trigger PR review workflow
+        uses: actions/github-script@v7
+        with:
+          script: |
+            // Get PR details
+            const { data: pr } = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.issue.number
+            });
+            
+            // Trigger repository dispatch to re-run the review on PR head
+            await github.rest.repos.createDispatchEvent({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              event_type: 'claude-review-requested',
+              client_payload: {
+                pr_number: context.issue.number,
+                head_sha: pr.head.sha,
+                head_ref: pr.head.ref
+              }
+            });
+
   claude-review:
     runs-on: ubuntu-latest
     # Run if:
@@ -17,15 +49,14 @@ jobs:
     # (Draft check happens in steps)
     if: |
       github.event.action == 'ready_for_review' ||
+      github.event_name == 'repository_dispatch' ||
       (github.event_name == 'pull_request' && contains(fromJSON('["opened", "reopened", "synchronize"]'), github.event.action)) ||
-      (github.event_name == 'issue_comment' && github.event.issue.pull_request && (contains(github.event.comment.body, '@claude') || contains(github.event.comment.body, '/review'))) ||
       (github.event_name == 'pull_request' && github.event.action == 'labeled' && github.event.label.name == 'trigger-ci')
     continue-on-error: true
     permissions:
       contents: read
       pull-requests: write
       issues: write
-      checks: write
       id-token: write
 
     steps:
@@ -33,43 +64,17 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
-      # For issue_comment, checkout the PR branch and get PR number
-      - name: Setup for comment trigger
-        if: github.event_name == 'issue_comment'
-        id: comment-setup
-        run: |
-          PR_NUMBER="${{ github.event.issue.number }}"
-          echo "pr_number=$PR_NUMBER" >> $GITHUB_OUTPUT
-          
-          # Get PR head ref and checkout
-          HEAD_REF=$(gh pr view $PR_NUMBER --json headRefName --jq '.headRefName')
-          git fetch origin $HEAD_REF
-          git checkout $HEAD_REF
-        env:
-          GH_TOKEN: ${{ github.token }}
-
-      - name: Set PR number
-        id: pr-info
-        run: |
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            echo "pr_number=${{ github.event.pull_request.number }}" >> $GITHUB_OUTPUT
-          else
-            echo "pr_number=${{ steps.comment-setup.outputs.pr_number }}" >> $GITHUB_OUTPUT
-          fi
+          ref: ${{ github.event_name == 'repository_dispatch' && github.event.client_payload.head_ref || '' }}
 
       - name: Check if PR is draft
         id: check-draft
         run: |
-          PR_NUMBER="${{ steps.pr-info.outputs.pr_number }}"
-          IS_DRAFT=$(gh pr view $PR_NUMBER --json isDraft --jq '.isDraft')
-          echo "is_draft=$IS_DRAFT" >> $GITHUB_OUTPUT
-          
-          if [ "$IS_DRAFT" = "true" ]; then
-            echo "✓ PR is a draft - skipping review"
-          else
-            echo "✓ PR is not a draft - will run review"
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            IS_DRAFT="${{ github.event.pull_request.draft }}"
+          elif [ "${{ github.event_name }}" = "repository_dispatch" ]; then
+            IS_DRAFT=$(gh pr view ${{ github.event.client_payload.pr_number }} --json isDraft --jq '.isDraft')
           fi
+          echo "is_draft=$IS_DRAFT" >> $GITHUB_OUTPUT
         env:
           GH_TOKEN: ${{ github.token }}
 
@@ -79,8 +84,6 @@ jobs:
         run: |
           COMMIT_SHA="${{ github.event.after }}"
           COMMIT_MSG=$(git log --format=%B -n 1 $COMMIT_SHA)
-          echo "Checking commit: $COMMIT_SHA"
-          echo "Commit message: $COMMIT_MSG"
           if [[ "$COMMIT_MSG" == *"@claude"* ]] || [[ "$COMMIT_MSG" == *"/review"* ]]; then
             echo "should_run=true" >> $GITHUB_OUTPUT
           else
@@ -88,10 +91,9 @@ jobs:
           fi
 
       - name: Run Claude Code Review
-        id: claude-review
         if: |
           steps.check-draft.outputs.is_draft != 'true' &&
-          (github.event.action != 'synchronize' || steps.check-commit.outputs.should_run == 'true')
+          (github.event_name == 'repository_dispatch' || github.event.action != 'synchronize' || steps.check-commit.outputs.should_run == 'true')
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
