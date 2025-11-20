@@ -25,6 +25,7 @@ jobs:
       contents: read
       pull-requests: write
       issues: write
+      checks: write
       id-token: write
 
     steps:
@@ -33,19 +34,37 @@ jobs:
         with:
           fetch-depth: 0
 
+      # For issue_comment, checkout the PR branch and get PR number
+      - name: Setup for comment trigger
+        if: github.event_name == 'issue_comment'
+        id: comment-setup
+        run: |
+          PR_NUMBER="${{ github.event.issue.number }}"
+          echo "pr_number=$PR_NUMBER" >> $GITHUB_OUTPUT
+          
+          # Get PR head ref and checkout
+          HEAD_REF=$(gh pr view $PR_NUMBER --json headRefName --jq '.headRefName')
+          git fetch origin $HEAD_REF
+          git checkout $HEAD_REF
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Set PR number
+        id: pr-info
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            echo "pr_number=${{ github.event.pull_request.number }}" >> $GITHUB_OUTPUT
+          else
+            echo "pr_number=${{ steps.comment-setup.outputs.pr_number }}" >> $GITHUB_OUTPUT
+          fi
+
       - name: Check if PR is draft
         id: check-draft
         run: |
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            IS_DRAFT="${{ github.event.pull_request.draft }}"
-          else
-            # For issue_comment events, fetch PR details
-            PR_NUMBER="${{ github.event.issue.number }}"
-            IS_DRAFT=$(gh pr view $PR_NUMBER --json isDraft --jq '.isDraft')
-          fi
-
+          PR_NUMBER="${{ steps.pr-info.outputs.pr_number }}"
+          IS_DRAFT=$(gh pr view $PR_NUMBER --json isDraft --jq '.isDraft')
           echo "is_draft=$IS_DRAFT" >> $GITHUB_OUTPUT
-
+          
           if [ "$IS_DRAFT" = "true" ]; then
             echo "✓ PR is a draft - skipping review"
           else
@@ -58,7 +77,6 @@ jobs:
         id: check-commit
         if: github.event_name == 'pull_request' && github.event.action == 'synchronize' && steps.check-draft.outputs.is_draft != 'true'
         run: |
-          # Get the commit that triggered this sync event
           COMMIT_SHA="${{ github.event.after }}"
           COMMIT_MSG=$(git log --format=%B -n 1 $COMMIT_SHA)
           echo "Checking commit: $COMMIT_SHA"
@@ -67,6 +85,7 @@ jobs:
             echo "should_run=true" >> $GITHUB_OUTPUT
           else
             echo "should_run=false" >> $GITHUB_OUTPUT
+          fi
 
       - name: Run Claude Code Review
         id: claude-review
@@ -80,7 +99,7 @@ jobs:
 
           prompt: |
             REPO: ${{ github.repository }}
-            PR NUMBER: ${{ github.event.pull_request.number }}
+            PR NUMBER: ${{ steps.pr-info.outputs.pr_number }}
 
             Review a PR
 
