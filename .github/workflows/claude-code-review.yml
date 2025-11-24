@@ -58,15 +58,19 @@ jobs:
         id: check-commit
         if: github.event_name == 'pull_request' && github.event.action == 'synchronize' && steps.check-draft.outputs.is_draft != 'true'
         run: |
-          # Get the commit that triggered this sync event
           COMMIT_SHA="${{ github.event.after }}"
-          COMMIT_MSG=$(git log --format=%B -n 1 $COMMIT_SHA)
-          echo "Checking commit: $COMMIT_SHA"
-          echo "Commit message: $COMMIT_MSG"
-          if [[ "$COMMIT_MSG" == *"@claude"* ]] || [[ "$COMMIT_MSG" == *"/review"* ]]; then
+          
+          # Get commit message and check in one go
+          if git log --format=%B -n 1 "$COMMIT_SHA" | grep -qE '@claude|/review'; then
             echo "should_run=true" >> $GITHUB_OUTPUT
+            echo "✓ Found trigger phrase in commit message"
           else
             echo "should_run=false" >> $GITHUB_OUTPUT
+            echo "✗ No trigger phrase found"
+          fi
+          
+          # Still show the commit for debugging
+          echo "Checked commit: $COMMIT_SHA"
 
       - name: Run Claude Code Review
         id: claude-review
