@@ -1,3 +1,3 @@
 export function greet(): void {
-    console.log("Hello Woorld!");
+    console.log("Hello World!");
 }
