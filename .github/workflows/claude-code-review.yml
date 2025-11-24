@@ -88,7 +88,8 @@ jobs:
 
             Review a PR
 
-            ${{ github.event_name == 'issue_comment' && format('USER COMMENT: {0}', github.event.comment.body) || '' }}
+            ${{ github.event_name == 'issue_comment' && format('User comment: {0}', github.event.comment.body) || '' }}
+            ${{ github.event_name == 'issue_comment' && 'Note: The user has provided specific instructions in their comment above. Make sure to consider them during your review as well.' || '' }}
 
             IMPORTANT: Post your review with this exact header at the top:
             ## 🔍 General Code Review (Linus & Cassidy)
