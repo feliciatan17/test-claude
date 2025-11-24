@@ -84,9 +84,11 @@ jobs:
 
           prompt: |
             REPO: ${{ github.repository }}
-            PR NUMBER: ${{ github.event.pull_request.number }}
+            PR NUMBER: ${{ github.event.pull_request.number || github.event.issue.number }}
 
             Review a PR
+
+            ${{ github.event_name == 'issue_comment' && format('USER COMMENT: {0}', github.event.comment.body) || '' }}
 
             IMPORTANT: Post your review with this exact header at the top:
             ## 🔍 General Code Review (Linus & Cassidy)
