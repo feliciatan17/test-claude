@@ -81,7 +81,8 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          track_progress: true # ✨ Enables tracking comments
+          # track_progress only works with: opened, synchronize, ready_for_review, reopened
+          track_progress: ${{ github.event.action != 'labeled' && github.event_name != 'issue_comment' }}
 
           prompt: |
             REPO: ${{ github.repository }}
@@ -164,6 +165,5 @@ jobs:
 
           # Optional: Use sticky comments to make Claude reuse the same comment on subsequent pushes to the same PR
           use_sticky_comment: true
-          comment_tag: "claude-code-review"
           claude_args: |
             --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Bash(gh pr list:*)"
