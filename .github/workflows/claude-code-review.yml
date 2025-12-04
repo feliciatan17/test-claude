@@ -7,18 +7,19 @@ on:
     types: [created]
 
 jobs:
+  # Full Linus & Cassidy code review job - triggered by /review or PR events
   claude-review:
     runs-on: ubuntu-latest
     # Run if:
     # 1. PR is marked ready for review, OR
-    # 2. PR opened/reopened/synchronized with commit message containing trigger phrases, OR
-    # 3. Comment contains trigger phrases, OR
+    # 2. PR opened/reopened/synchronized with commit message containing '/review', OR
+    # 3. Comment contains '/review', OR
     # 4. Label 'trigger-ci' is added
     # (Draft check happens in steps)
     if: |
       github.event.action == 'ready_for_review' ||
       (github.event_name == 'pull_request' && contains(fromJSON('["opened", "reopened", "synchronize"]'), github.event.action)) ||
-      (github.event_name == 'issue_comment' && github.event.issue.pull_request && (contains(github.event.comment.body, '@claude') || contains(github.event.comment.body, '/review'))) ||
+      (github.event_name == 'issue_comment' && github.event.issue.pull_request && contains(github.event.comment.body, '/review')) ||
       (github.event_name == 'pull_request' && github.event.action == 'labeled' && github.event.label.name == 'trigger-ci')
     continue-on-error: true
     permissions:
@@ -59,17 +60,17 @@ jobs:
         if: github.event_name == 'pull_request' && github.event.action == 'synchronize' && steps.check-draft.outputs.is_draft != 'true'
         run: |
           COMMIT_SHA="${{ github.event.after }}"
-          
-          # Get commit message and check in one go
-          if git log --format=%B -n 1 "$COMMIT_SHA" | grep -qE '@claude|/review'; then
+
+          # Get commit message and check for /review trigger
+          if git log --format=%B -n 1 "$COMMIT_SHA" | grep -qE '/review'; then
             echo "should_run=true" >> $GITHUB_OUTPUT
-            echo "✓ Found trigger phrase in commit message"
+            echo "✓ Found /review in commit message"
           else
             echo "should_run=false" >> $GITHUB_OUTPUT
-            echo "✗ No trigger phrase found"
+            echo "✗ No /review found"
           fi
-          
-          # Still show the commit for debugging
+
+          # Show the commit for debugging
           echo "Checked commit: $COMMIT_SHA"
 
       - name: Run Claude Code Review
@@ -131,7 +132,7 @@ jobs:
 
             </details>
 
-            **🎯 Consensus Summary:** A concise, actionable plan that combines both perspectives. 
+            **🎯 Consensus Summary:** A concise, actionable plan that combines both perspectives.
 
             Follow these steps:
 
@@ -149,7 +150,7 @@ jobs:
 
             Keep your review concise but thorough. Focus on:
             - Code correctness, major bugs or logic issues
-            - Code readability and structure 
+            - Code readability and structure
             - Following project conventions
             - Performance and efficiency
             - Maintainability and scalability
